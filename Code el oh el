@@ -1,10 +1,16 @@
 #include <SPI.h>  // Library for SPI communication, used for SD card interface.
 #include <SD.h>  // SD library to manage SD card read/write operations.
 #include <math.h>  // Math library to perform mathematical operations.
+#include <LiquidCrystal.h>  // LCD library for text display
 
 #define SAMPLES_PER_GROUP 12  // Number of samples taken per color group for averaging.
 
-#define NUM_COLOR_VALUES 4 //Red, blue, green, and yellow values  // Number of distinct colors being tracked (Red, Blue, Green, Yellow).
+#define NUM_COLOR_VALUES 11 //Red, blue, green, and yellow values  // Number of distinct colors being tracked (Red, Blue, Green, Yellow).
+// Array of color names for LCD display
+const char* colorNames[NUM_COLOR_VALUES] = {
+    "Red", "Orange", "Yellow", "Green", "Blue", "Purple",
+    "Pink", "Brown", "Gray", "Black", "White"
+};
 #define BUTTON_PIN 2  // Pin for button input to trigger actions in the program.
 #define YELLOW_LED 14 //A0  // Pin for Yellow LED output to indicate yellow color detection.
 #define GREEN_LED 15 //A1  // Pin for Green LED output to indicate green color detection.
@@ -14,9 +20,11 @@
 #define TOGGLE_SWITCH_PIN 19 //A5
 #define POTENTIOMETER_PIN 21 //A7
 
+LiquidCrystal lcd(5, 18, 19, 16, 17, 21); //change to whatever pins we use
+
 struct sample{
 	//A sample of the values read by the phototransistor from the colored LEDs
-	unsigned int groupValue : 3; //We only need 3 bits to categorize 6 groups
+	unsigned int groupValue : 4; //We only need 4 bits to categorize 11 groups
 	uint8_t colorValues[NUM_COLOR_VALUES]; //RGBY values for the sample (1 byte per entry for a total of 4 bytes)
 	unsigned int distance : 11; //The biggest distance can be 2046 units (comparing all zeros to all 1023s) so we allocate 2048 bits.
 	
@@ -35,8 +43,9 @@ struct sample{
 
 struct Group
 {
-	unsigned int id : 3; //There are only 6 groups, so we only need 3 bits
+	unsigned int id : 4; //There are only 11 groups, so we only need 4 bits
 	unsigned int frequency : 4; //We're limiting it to 12 samples per group, and 4 bits give us 15
+  //We can do up to 15 samples per group
 };
 
 struct{
@@ -109,7 +118,12 @@ int classify(sample arr[], int numTrainingSamples, int k, const sample node)
 	Group g3 {3};
 	Group g4 {4};
 	Group g5 {5};
-	Group allGroups[6] = {g0,g1,g2,g3,g4,g5};
+  	Group g6 {6};
+	Group g7 {7};
+	Group g8 {8};
+	Group g9 {9};
+	Group g10 {10};
+	Group allGroups[11] = {g0,g1,g2,g3,g4,g5,g6,g7,g8,g9,g10};
 	
 	//For each neighbor of the sample (node) we use the distance formula and set it's "distance" member variable
 	for(int a = 0; a < numTrainingSamples; a++)
@@ -144,13 +158,25 @@ int classify(sample arr[], int numTrainingSamples, int k, const sample node)
 			case 6:
 				allGroups[6].frequency++;
 				break;
+      case 7:
+				allGroups[7].frequency++;
+				break;
+      case 8:
+				allGroups[8].frequency++;
+				break;
+      case 9:
+				allGroups[9].frequency++;
+				break;
+      case 10:
+				allGroups[10].frequency++;
+				break;
 		}
 	}
 	
 	//Finally, we look at the most common group in the neighboring samples
 	int highestFrequency = 0;
 	int groupNumber;
-	for(int a = 0; a < 6; a++) //6 because there are 6 groups
+	for(int a = 0; a < 11; a++) //11 because there are 11 groups
 	{
 		if(allGroups[a].frequency >= highestFrequency)
 		{
@@ -200,67 +226,47 @@ void getDataFromCard()
   Serial.println(colorDetector.trainingData[0].colorValues[0]);
 }
 
-void displayNumber(int number)
+void displayColor(int number)
 {
 	//Displays the given number on the 7-segment display
 	//Displays a letter on the 7-segment display based on the number given
 	//If these are backwards, swap the positive and negative wires on your potentiometer
+  lcd.clear();
 	switch(number)
 	{
-		case 0: //A
-			digitalWrite(3, HIGH);
-			digitalWrite(4, HIGH);
-			digitalWrite(5, HIGH);
-			digitalWrite(6, HIGH);
-			digitalWrite(7, LOW);
-			digitalWrite(8, HIGH);
-			digitalWrite(9, HIGH);
-			break;
-		case 1: //B
-			digitalWrite(3,LOW);
-			digitalWrite(4,HIGH);
-			digitalWrite(5,LOW);
-			digitalWrite(6,HIGH);
-			digitalWrite(7,HIGH);
-			digitalWrite(8,HIGH);
-			digitalWrite(9,HIGH);
-			break;
-		case 2: //C
-			digitalWrite(3,LOW);
-			digitalWrite(4,HIGH);
-			digitalWrite(5,HIGH);
-			digitalWrite(6,LOW);
-			digitalWrite(7,HIGH);
-			digitalWrite(8,LOW);
-			digitalWrite(9,HIGH);
-			break;
-		case 3: //D
-			digitalWrite(3,HIGH);
-			digitalWrite(4,LOW);
-			digitalWrite(5,LOW);
-			digitalWrite(6,HIGH);
-			digitalWrite(7,HIGH);
-			digitalWrite(8,HIGH);
-			digitalWrite(9,HIGH);
-			break;
-		case 4: //E
-			digitalWrite(3,LOW);
-			digitalWrite(4,HIGH);
-			digitalWrite(5,HIGH);
-			digitalWrite(6,HIGH);
-			digitalWrite(7,HIGH);
-			digitalWrite(8,LOW);
-			digitalWrite(9,HIGH);
-			break;
-		case 5: //F
-			digitalWrite(3,LOW);
-			digitalWrite(4,HIGH);
-			digitalWrite(5,HIGH);
-			digitalWrite(6,HIGH);
-			digitalWrite(7,LOW);
-			digitalWrite(8,LOW);
-			digitalWrite(9,HIGH);
-			break;
+    case 0:
+      lcd.print("Red");
+      break;
+    case 1:
+      lcd.print("Orange");
+      break;
+    case 2:
+      lcd.print("Yellow");
+      break;
+		case 3:
+      lcd.print("Green");
+      break;
+    case 4:
+      lcd.print("Blue");
+      break;
+    case 5:
+      lcd.print("Purple");
+      break;
+    case 6:
+      lcd.print("Pink");
+      break;
+    case 7:
+      lcd.print("Brown");
+      break;
+    case 8:
+      lcd.print("Gray");
+      break;
+    case 9:
+      lcd.print("Black");
+      break;
+    case 10:
+      lcd.print("White");
+      break;
 	}
 }
 
@@ -314,15 +320,21 @@ void updateSelectedGroupId()
 {
 	int val = analogRead(POTENTIOMETER_PIN);
 	//Values go from 0 to 1023
-	val = map(val, 0, 1023, 0, 5);
+	val = map(val, 0, 1023, 0, 10);
 	colorDetector.selectedGroupId = val;
-	displayNumber(val); //Display the group ID on the 7-segment display
+	displayColor(val); //Display the group ID on the 7-segment display
 }
 
 void setup()
 {
   Serial.begin(9600);
 	SD.begin();
+
+  lcd.begin(16, 2);
+  lcd.print("Hello!");
+  delay(1000);
+  lcd.clear();
+
 	pinMode(BUTTON_PIN, INPUT_PULLUP);
 	pinMode(TOGGLE_SWITCH_PIN, INPUT_PULLUP);
 	pinMode(POTENTIOMETER_PIN, INPUT);
@@ -331,66 +343,93 @@ void setup()
 	pinMode(GREEN_LED, OUTPUT);
 	pinMode(RED_LED, OUTPUT);
 	pinMode(BLUE_LED, OUTPUT);
-	pinMode(3, OUTPUT); //These unnamed pins are for the 7-segment display
-	pinMode(4, OUTPUT);
-	pinMode(5, OUTPUT);
-	pinMode(6, OUTPUT);
-	pinMode(7, OUTPUT);
-	pinMode(8, OUTPUT);
-	pinMode(9, OUTPUT);
 	getDataFromCard();
 	colorDetector.loadingRequired = 0;
-	digitalWrite(6, HIGH); //Just display a dash at the very beginning so we know it's on
+
+  if (digitalRead(TOGGLE_SWITCH_PIN)) {
+        lcd.print("Training Mode");
+  } else {
+        lcd.print("Sampling Mode");
+  }
+  delay(2000);  // Show mode for 2 seconds
+  lcd.clear();
+
 }
+
 
 void loop()
 {
-	colorDetector.trainingModeActive = digitalRead(TOGGLE_SWITCH_PIN);
-	if(colorDetector.trainingModeActive)
-		updateSelectedGroupId(); //Update 7-segment display as the potentiometer turns
-	if(!digitalRead(BUTTON_PIN) && !colorDetector.currentlyReading)
-	{
-		colorDetector.currentlyReading = 1;
-		if(colorDetector.trainingModeActive)
-		{
-			//When we click the button we will store the data into the selected group's file on the SD card
-			File myFile = SD.open((String)colorDetector.selectedGroupId + ".txt", FILE_WRITE);
-			//Since we added to the training data, we need to load that new data next time we sample
-			colorDetector.loadingRequired = 1;
-			//Write color data to SD card in RGBY order
-			writeColor(RED_LED, myFile);
-			writeColor(GREEN_LED, myFile);
-			writeColor(BLUE_LED, myFile);
-			writeColor(YELLOW_LED, myFile);
-			myFile.print("\n");
-			myFile.close();
-		}
-		else
-		{
-			//When we click the button we will compare the sample data to the training data
-			//But first, turn off the display except for the middle dash so we know when it's done classifying
-			for(int i = 3; i < 10; i++)
-			{
-				digitalWrite(i, LOW);
-			}
-			digitalWrite(6, HIGH);
-			sample newSample;
-			newSample.colorValues[0] = readColor(RED_LED);
-			newSample.colorValues[1] = readColor(GREEN_LED);
-			newSample.colorValues[2] = readColor(BLUE_LED);
-			newSample.colorValues[3] = readColor(YELLOW_LED);
-			//If we haven't added anything new to the training data, we don't need to read from the SD card again
-			if(colorDetector.loadingRequired)
-			{
-				//Take the training data from the SD card and put it into the trainingData array
-				getDataFromCard();
-				colorDetector.loadingRequired = 0;
-			}
-			//Now we use the classify() function to determine what color newSample is... but how many neighbors should we look at?
-			//Typically you can get away with setting k to the square root of the total number of datapoints. In our case k=sqrt(6*12)
-			int newSample_groupId = classify(colorDetector.trainingData, 6*SAMPLES_PER_GROUP, 9, newSample);
-			displayNumber(newSample_groupId);
-		}
-		colorDetector.currentlyReading = 0;
-	}
-}
+  // Check and update the mode (training or sampling) based on the toggle switch
+  bool currentMode = digitalRead(TOGGLE_SWITCH_PIN);
+  if (colorDetector.trainingModeActive != currentMode) {
+    colorDetector.trainingModeActive = currentMode;
+
+    // Display the mode on the LCD for 2 seconds
+    lcd.clear();
+    if (colorDetector.trainingModeActive) {
+      lcd.print("Training Mode");
+    } else {
+      lcd.print("Sampling Mode");
+    }
+    delay(2000);  // Show mode for 2 seconds
+    lcd.clear();
+  }
+
+  // Update the selected color group ID in training mode
+  if (colorDetector.trainingModeActive) {
+    updateSelectedGroupId();
+  }
+
+  // Check if button is pressed for sampling or training actions
+  if (!digitalRead(BUTTON_PIN) && !colorDetector.currentlyReading) {
+    colorDetector.currentlyReading = 1;
+
+    if (colorDetector.trainingModeActive) {
+      // Store data into the selected group's file on the SD card in training mode
+      File myFile = SD.open(String(colorDetector.selectedGroupId) + ".txt", FILE_WRITE);
+      colorDetector.loadingRequired = 1;  // Flag to reload data on next sample
+
+      // Write color data to SD card in RGBY order
+      writeColor(RED_LED, myFile);
+      writeColor(GREEN_LED, myFile);
+      writeColor(BLUE_LED, myFile);
+      writeColor(YELLOW_LED, myFile);
+      myFile.print("\n");
+      myFile.close();
+
+      // Confirmation message for data storage in training mode
+      lcd.clear();
+      lcd.print("Sample saved! :)");
+      delay(1000);  // Show confirmation for 1 second
+      lcd.clear();
+
+      } else {
+        // Sampling mode: Read color values and classify the sample
+        lcd.clear();
+        lcd.print("Sampling...");
+        sample newSample;
+        newSample.colorValues[0] = readColor(RED_LED);
+        newSample.colorValues[1] = readColor(GREEN_LED);
+        newSample.colorValues[2] = readColor(BLUE_LED);
+        newSample.colorValues[3] = readColor(YELLOW_LED);
+
+        // Load training data if required
+        if (colorDetector.loadingRequired) {
+          getDataFromCard();
+          colorDetector.loadingRequired = 0;
+        }
+
+        // Classify the sample based on nearest neighbors
+        int newSample_groupId = classify(colorDetector.trainingData, 11 * SAMPLES_PER_GROUP, 9, newSample);
+
+        // Display the detected color name from the colorNames array
+        lcd.clear();
+        lcd.print("Detected: ");
+        lcd.setCursor(0, 1);  // Move to the second line on the LCD
+        lcd.print(colorNames[newSample_groupId]);
+        delay(5000);  // Show detected color for 2 seconds
+        lcd.clear();
+      }
+
+      colorDetector.currentlyReading = 0;
+  }
