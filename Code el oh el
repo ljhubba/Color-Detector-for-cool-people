@@ -1,5 +1,4 @@
-#include <SPI.h>  // Library for SPI communication, used for SD card interface.
-#include <SD.h>  // SD library to manage SD card read/write operations.
+#include <SD_MMC.h>  // SD library to manage SD card read/write operations.
 #include <math.h>  // Math library to perform mathematical operations.
 #include <LiquidCrystal.h>  // LCD library for text display
 
@@ -118,7 +117,7 @@ int classify(sample arr[], int numTrainingSamples, int k, const sample node)
 	Group g3 {3};
 	Group g4 {4};
 	Group g5 {5};
-  	Group g6 {6};
+  Group g6 {6};
 	Group g7 {7};
 	Group g8 {8};
 	Group g9 {9};
@@ -199,7 +198,7 @@ void getDataFromCard()
 	for(int groupNumber = 0; groupNumber < 6; groupNumber++)
 	{
     Serial.println(groupNumber);
-		myFile = SD.open(String(groupNumber) + ".txt", FILE_READ);
+		myFile = SD_MMC.open(String(groupNumber) + ".txt", FILE_READ);
 		while(1)
 		{
 			value = myFile.readStringUntil('.');
@@ -328,9 +327,17 @@ void updateSelectedGroupId()
 void setup()
 {
   Serial.begin(9600);
-	SD.begin();
+    lcd.begin(16, 2);
 
-  lcd.begin(16, 2);
+  if (!SD_MMC.begin()) {
+    Serial.println("SD Card Mount Failed");
+    lcd.print("SD Card Error");
+    delay(2000);
+    lcd.clear();
+    return;  // Stop setup if SD card initialization fails
+  } 
+
+  Serial.println("SD Card Initialized");
   lcd.print("Hello!");
   delay(1000);
   lcd.clear();
@@ -343,6 +350,8 @@ void setup()
 	pinMode(GREEN_LED, OUTPUT);
 	pinMode(RED_LED, OUTPUT);
 	pinMode(BLUE_LED, OUTPUT);
+
+
 	getDataFromCard();
 	colorDetector.loadingRequired = 0;
 
@@ -386,7 +395,7 @@ void loop()
 
     if (colorDetector.trainingModeActive) {
       // Store data into the selected group's file on the SD card in training mode
-      File myFile = SD.open(String(colorDetector.selectedGroupId) + ".txt", FILE_WRITE);
+      File myFile = SD_MMC.open(String(colorDetector.selectedGroupId) + ".txt", FILE_WRITE);
       colorDetector.loadingRequired = 1;  // Flag to reload data on next sample
 
       // Write color data to SD card in RGBY order
@@ -433,3 +442,4 @@ void loop()
 
       colorDetector.currentlyReading = 0;
   }
+}
