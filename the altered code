@@ -97,6 +97,7 @@ unsigned int colorValueDistance(const sample s1, sample s2)
 	
 	//we are returning integer versions of the sqrt(sum) (up to 2^9 bits) because that's the max distance a sample can have
 	sum = sqrt(sum);
+	Serial.print("Distance: "); Serial.println(sum);  // Serial output for testing distance calculations
 	if(sum > 511)
 		return 511;
 	else if(sum < 1)
@@ -134,6 +135,9 @@ int classify(sample arr[], int numTrainingSamples, int k, const sample node)
 	//Now we count how many times each group is in the nearest k number of neighbors
 	for(int a = 0; a < k; a++)
 	{
+		Serial.print("Neighbor "); Serial.print(a); Serial.print(" Group: ");
+		Serial.print(arr[a].groupValue); Serial.print(" Distance: ");
+		Serial.println(arr[a].distance);  // Serial output for each neighbor in KNN
 		switch(arr[a].groupValue)
 		{
 			case 0:
@@ -184,6 +188,7 @@ int classify(sample arr[], int numTrainingSamples, int k, const sample node)
 		}
 	}
 	
+	Serial.print("Detected Group ID: "); Serial.println(groupNumber);  // Serial output for detected group ID
 	return groupNumber;
 }
 
@@ -211,7 +216,9 @@ void getDataFromCard()
 			//Store the value from the file into the sample
 			colorDetector.trainingData[nodeCount].colorValues[row] = value.toInt();
 			colorDetector.trainingData[nodeCount].groupValue = groupNumber;
-      Serial.println(colorDetector.trainingData[nodeCount].colorValues[row]);
+      Serial.print("Training Data ["); Serial.print(nodeCount); Serial.print("]: ");
+      Serial.print(colorDetector.trainingData[nodeCount].colorValues[row]);
+      Serial.print(" Group: "); Serial.println(colorDetector.trainingData[nodeCount].groupValue);  // Serial output for each loaded sample
 			row++;
 			if(row == 4)
 			{
@@ -231,6 +238,7 @@ void displayColor(int number)
 	//Displays a letter on the 7-segment display based on the number given
 	//If these are backwards, swap the positive and negative wires on your potentiometer
   lcd.clear();
+  Serial.print("Displaying color: "); Serial.println(colorNames[number]);  // Serial output for color display
 	switch(number)
 	{
     case 0:
@@ -281,6 +289,7 @@ void writeColor(int pin, File myFile)
 	digitalWrite(pin, HIGH);
 	delay(100);
 	int reading = analogRead(PHOTOTRANSISTOR_PIN);
+	Serial.print("Color Reading at pin "); Serial.print(pin); Serial.print(": "); Serial.println(reading);  // Serial output for each color reading
 	int numDigits = getNumDigits(reading);
 	switch(numDigits)
 	{
@@ -310,6 +319,7 @@ int readColor(int pin)
 	digitalWrite(pin, HIGH);
 	delay(100);
 	int reading = analogRead(PHOTOTRANSISTOR_PIN);
+	Serial.print("Read Color at pin "); Serial.print(pin); Serial.print(": "); Serial.println(reading);  // Serial output for each color reading without SD write
 	digitalWrite(pin, LOW);
 	delay(100);
 	return reading;
@@ -321,6 +331,7 @@ void updateSelectedGroupId()
 	//Values go from 0 to 1023
 	val = map(val, 0, 1023, 0, 10);
 	colorDetector.selectedGroupId = val;
+	Serial.print("Selected Group ID: "); Serial.println(val);  // Serial output for selected group ID
 	displayColor(val); //Display the group ID on the LCD 
 	delay(3000);
 	lcd.clear();
@@ -379,8 +390,10 @@ void loop()
     lcd.clear();
     if (colorDetector.trainingModeActive) {
       lcd.print("Training Mode");
+      Serial.println("Mode: Training");  // Serial output for mode change
     } else {
       lcd.print("Sampling Mode");
+      Serial.println("Mode: Sampling");  // Serial output for mode change
     }
     delay(2000);  // Show mode for 2 seconds
     lcd.clear();
@@ -401,6 +414,7 @@ void loop()
       colorDetector.loadingRequired = 1;  // Flag to reload data on next sample
 
       // Write color data to SD card in RGBY order
+      Serial.println("Saving sample data...");  // Serial output for saving sample data
       writeColor(RED_LED, myFile);
       writeColor(GREEN_LED, myFile);
       writeColor(BLUE_LED, myFile);
@@ -438,7 +452,8 @@ void loop()
         lcd.print("Detected: ");
         lcd.setCursor(0, 1);  // Move to the second line on the LCD
         lcd.print(colorNames[newSample_groupId]);
-        delay(5000);  // Show detected color for 5 seconds
+        Serial.print("Detected color: "); Serial.println(colorNames[newSample_groupId]);  // Serial output for detected color
+        delay(5000);  // Show detected color for 2 seconds
         lcd.clear();
       }
 
