@@ -1,17 +1,30 @@
+//Changelog updated pin assignments to match color detector schematic v1.1 on 11/7 at 6:20p
+//TODO add code to detect potentiometer and phototransistor
+
 #include <LiquidCrystal.h>  // LCD library for text display
 #include <SD_MMC.h>  // SD library to manage SD card read/write operations.
 
-#define BUTTON_PIN 2  // Pin for button input to trigger actions in the program.
-#define YELLOW_LED 14 //A0  // Pin for Yellow LED output to indicate yellow color detection.
-#define GREEN_LED 15 //A1  // Pin for Green LED output to indicate green color detection.
-#define RED_LED 16 //A2
-#define BLUE_LED 17 //A3
-#define PHOTOTRANSISTOR_PIN 18 //A4
-#define TOGGLE_SWITCH_PIN 19 //A5
-#define POTENTIOMETER_PIN 21 //A7
 
-LiquidCrystal lcd(5, 18, 19, 16, 17, 21); //change to whatever pins we use
 
+#define RED_LED 6 //ESP5
+#define GREEN_LED 7 //ESP6  // Pin for Green LED output to indicate green color detection.
+#define BLUE_LED 8 //ESP6
+#define YELLOW_LED 9 //ESP21  // Pin for Yellow LED output to indicate yellow color detection.
+
+#define BUTTON_PIN 4  //ESP2
+#define TOGGLE_SWITCH_PIN 3 //ESP1
+
+#define PHOTOTRANSISTOR_PIN 23 //ESP14_A1
+#define POTENTIOMETER_PIN 24 //ESP10_A0
+
+//assign ESP32 pins to LCD pins in order RS(4) E(6) D4(11) D5(12) D6(13) D7(14)
+LiquidCrystal lcd(18,16,17,19,20,21);
+//uc18->lcd4
+//uc16->lcd6
+//uc17->lcd11
+//uc19->lcd12
+//uc20->lcd13
+//uc21->lcd14
 
 void setup()//called automagically cuz arduino
 {
@@ -59,13 +72,23 @@ void loop()
     // Check and update the mode (training or sampling) based on the toggle switch
   if (digitalRead(TOGGLE_SWITCH_PIN))
     {
+      digitalWrite(RED_LED, HIGH);
+      digitalWrite(GREEN_LED, HIGH);
+      digitalWrite(BLUE_LED, LOW);
+      digitalWrite(YELLOW_LED, LOW);
+      
       lcd.clear();
-      lcd.print("toggle position a");
+      lcd.print("toggle pos a");
       delay(2000);  // Show mode for 2 seconds
       lcd.clear();
     } else {
+      digitalWrite(RED_LED, LOW);
+      digitalWrite(GREEN_LED, LOW);
+      digitalWrite(BLUE_LED, HIGH);
+      digitalWrite(YELLOW_LED, HIGH);
+      
       lcd.clear();
-      lcd.print("toggle position b");
+      lcd.print("toggle pos b");
       delay(2000);  // Show mode for 2 seconds
       lcd.clear();
   }
