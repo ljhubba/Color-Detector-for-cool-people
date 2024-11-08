@@ -43,8 +43,8 @@ struct sample{
 struct Group
 {
 	unsigned int id : 4; //There are only 11 groups, so we only need 4 bits
-	unsigned int frequency : 4; //We're limiting it to 12 samples per group, and 4 bits give us 15
-  //We can do up to 15 samples per group
+	unsigned int frequency : 4; //We're limiting it to 15 samples per group, and 4 bits give us 15
+  //We can do up to 15 samples per group, 10 may be easier, anything less than 15
 };
 
 struct{
@@ -53,7 +53,7 @@ struct{
 	unsigned char currentlyReading : 1; //Debounce for button press
 	unsigned char loadingRequired : 1; //When we flip the toggle switch to sampling, we need to load the data
 	unsigned int selectedGroupId : 4; //What's the potentiometer pointing to?
-	sample trainingData[6*SAMPLES_PER_GROUP];
+	sample trainingData[11*SAMPLES_PER_GROUP];
 }colorDetector;
 
 void insertionSort(sample arr[], int n)
@@ -117,7 +117,7 @@ int classify(sample arr[], int numTrainingSamples, int k, const sample node)
 	Group g3 {3};
 	Group g4 {4};
 	Group g5 {5};
-  Group g6 {6};
+ 	Group g6 {6};
 	Group g7 {7};
 	Group g8 {8};
 	Group g9 {9};
@@ -157,16 +157,16 @@ int classify(sample arr[], int numTrainingSamples, int k, const sample node)
 			case 6:
 				allGroups[6].frequency++;
 				break;
-      case 7:
+    			case 7:
 				allGroups[7].frequency++;
 				break;
-      case 8:
+      			case 8:
 				allGroups[8].frequency++;
 				break;
-      case 9:
+      			case 9:
 				allGroups[9].frequency++;
 				break;
-      case 10:
+      			case 10:
 				allGroups[10].frequency++;
 				break;
 		}
@@ -321,7 +321,9 @@ void updateSelectedGroupId()
 	//Values go from 0 to 1023
 	val = map(val, 0, 1023, 0, 10);
 	colorDetector.selectedGroupId = val;
-	displayColor(val); //Display the group ID on the 7-segment display
+	displayColor(val); //Display the group ID on the LCD 
+	delay(3000);
+	lcd.clear();
 }
 
 void setup()
@@ -436,7 +438,7 @@ void loop()
         lcd.print("Detected: ");
         lcd.setCursor(0, 1);  // Move to the second line on the LCD
         lcd.print(colorNames[newSample_groupId]);
-        delay(5000);  // Show detected color for 2 seconds
+        delay(5000);  // Show detected color for 5 seconds
         lcd.clear();
       }
 
