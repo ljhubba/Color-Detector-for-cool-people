@@ -2,7 +2,7 @@
 #include <math.h>  // Math library to perform mathematical operations.
 #include <LiquidCrystal.h>  // LCD library for text display
 
-#define SAMPLES_PER_GROUP 12  // Number of samples taken per color group for averaging.
+#define SAMPLES_PER_GROUP 8  // Number of samples taken per color group for averaging.
 
 #define NUM_COLOR_VALUES 11 //Red, blue, green, and yellow values  // Number of distinct colors being tracked (Red, Blue, Green, Yellow).
 // Array of color names for LCD display
