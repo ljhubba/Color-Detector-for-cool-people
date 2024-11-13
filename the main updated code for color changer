@@ -1,9 +1,8 @@
-#include <SD_MMC.h>  // SD library to manage SD card read/write operations.
+#include <SD.h>  // SD library to manage SD card read/write operations.
 #include <math.h>  // Math library to perform mathematical operations.
 #include <LiquidCrystal.h>  // LCD library for text display
 
 #define SAMPLES_PER_GROUP 8  // Number of samples taken per color group for averaging.
-
 #define NUM_COLOR_VALUES 11 //Red, blue, green, and yellow values  // Number of distinct colors being tracked (Red, Blue, Green, Yellow).
 // Array of color names for LCD display
 const char* colorNames[NUM_COLOR_VALUES] = {
@@ -18,6 +17,7 @@ const char* colorNames[NUM_COLOR_VALUES] = {
 #define PHOTOTRANSISTOR_PIN 23
 #define TOGGLE_SWITCH_PIN 3 
 #define POTENTIOMETER_PIN 24 
+#define PIN_SPI_CS 5//4
 
 LiquidCrystal lcd(18,16,17,19,20,21); //change to whatever pins we use
 
@@ -198,7 +198,7 @@ void getDataFromCard()
 	for(int groupNumber = 0; groupNumber < 6; groupNumber++)
 	{
     Serial.println(groupNumber);
-		myFile = SD_MMC.open(String(groupNumber) + ".txt", FILE_READ);
+		myFile = SD.open(String(groupNumber) + ".txt", FILE_READ);
 		while(1)
 		{
 			value = myFile.readStringUntil('.');
@@ -331,19 +331,18 @@ void setup()
   Serial.begin(9600);
     lcd.begin(16, 2);
 
-  if (!SD_MMC.begin()) {
+  if (!SD.begin(PIN_CS_SPI)) {
     Serial.println("SD Card Mount Failed");
     lcd.print("SD Card Error");
     delay(2000);
     lcd.clear();
-    return;  // Stop setup if SD card initialization fails
+    while(1);  // don't do anything else
   } 
 
   Serial.println("SD Card Initialized");
   lcd.print("Hello!");
   delay(1000);
   lcd.clear();
-
 	pinMode(BUTTON_PIN, INPUT_PULLUP);
 	pinMode(TOGGLE_SWITCH_PIN, INPUT_PULLUP);
 	pinMode(POTENTIOMETER_PIN, INPUT);
@@ -352,8 +351,8 @@ void setup()
 	pinMode(GREEN_LED, OUTPUT);
 	pinMode(RED_LED, OUTPUT);
 	pinMode(BLUE_LED, OUTPUT);
-
-
+	
+	
 	getDataFromCard();
 	colorDetector.loadingRequired = 0;
 
@@ -397,7 +396,7 @@ void loop()
 
     if (colorDetector.trainingModeActive) {
       // Store data into the selected group's file on the SD card in training mode
-      File myFile = SD_MMC.open(String(colorDetector.selectedGroupId) + ".txt", FILE_WRITE);
+      File myFile = SD.open(String(colorDetector.selectedGroupId) + ".txt", FILE_WRITE);
       colorDetector.loadingRequired = 1;  // Flag to reload data on next sample
 
       // Write color data to SD card in RGBY order
