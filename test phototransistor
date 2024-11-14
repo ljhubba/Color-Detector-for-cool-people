@@ -1,0 +1,67 @@
+// TEST CODE FOR PHOTOTRANSISTOR USING BUTTON AND LEDS, SAME PINS
+#include <math.h> 
+
+#define PHOTOTRANSISTOR_PIN 39  // Pin for phototransistor input
+#define BUTTON_PIN 32  // Pin for button input to trigger actions in the program.
+#define YELLOW_LED 13  // Pin for Yellow LED output to indicate yellow color detection.
+#define GREEN_LED 27  // Pin for Green LED output to indicate green color detection.
+#define RED_LED 33 
+#define BLUE_LED 12 
+
+int getNumDigits(int num)
+{
+  //Returns the number of digits in an integer
+  return (int) log10((double) num) + 1;
+}
+
+void writeColor(int pin)
+{
+  //Turns on an LED at the specified pin, reads the value on the transistor, and stores it in 4-char format on the SD card
+  digitalWrite(pin, HIGH);
+  delay(100);
+  int reading = analogRead(PHOTOTRANSISTOR_PIN);
+  int numDigits = getNumDigits(reading);
+  switch(numDigits)
+  {
+    case 0:
+      Serial.println("0000");
+      break;
+    case 1:
+      Serial.println("000" + String(reading));
+      break;
+    case 2:
+      Serial.println("00" + String(reading));
+      break;
+    case 3:
+      Serial.println("0" + String(reading));
+      break;
+    default:
+      Serial.println(String(reading));
+  }
+  Serial.println(".");
+  digitalWrite(pin, LOW);
+  delay(100);
+}
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(PHOTOTRANSISTOR_PIN, INPUT);
+  pinMode(YELLOW_LED, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(BLUE_LED, OUTPUT);
+}
+
+void loop() {
+  int reading = analogRead(PHOTOTRANSISTOR_PIN);  // Read phototransistor value
+  Serial.println(reading);  // Print reading to Serial Monitor
+  if (digitalRead(BUTTON_PIN)) {
+    writeColor(RED_LED);
+    writeColor(GREEN_LED);
+    writeColor(BLUE_LED);
+    writeColor(YELLOW_LED);
+    Serial.println("nut man");
+  }
+  delay(3000);  // Delay to control the frequency of readings
+}
