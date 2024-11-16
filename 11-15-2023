@@ -1,3 +1,4 @@
+//SRC FILE
 #include <SD.h>  // SD library to manage SD card read/write operations.
 #include <math.h>  // Math library to perform mathematical operations.
 #include <LiquidCrystal.h>  // LCD library for text display
@@ -213,11 +214,14 @@ void getDataFromCard()
   int counter = 0;
   for(int groupNumber = 0; groupNumber < 6; groupNumber++) {
       Serial.println(groupNumber);
-      Serial.println("217");
     //String temp = "/" + String(groupNumber) + ".txt";
       //Serial.println(temp);
+      delay(2000);
       myFile = SD.open(String(groupNumber) + ".txt");
-      Serial.println("219");
+      //TODO
+      if(!myFile) {
+        Serial.println("Failed to open file in GetDataFromCard");
+      }
       while(1) {
       value = myFile.readStringUntil('.');
       if(value == NULL || value == (String)'\n' || counter == SAMPLES_PER_GROUP)
@@ -301,6 +305,7 @@ void writeColor(int pin, File myFile)
   delay(100);
   int reading = analogRead(PHOTOTRANSISTOR_PIN);
   int numDigits = getNumDigits(reading);
+  //TODO
   switch(numDigits)
   {
     case 0:
@@ -319,6 +324,7 @@ void writeColor(int pin, File myFile)
       myFile.print(String(reading));
   }
   Serial.println(reading);
+  Serial.println(" in writeColor");
   myFile.print(".");
   Serial.println(myFile.read());
   digitalWrite(pin, LOW);
@@ -331,6 +337,9 @@ int readColor(int pin)
   digitalWrite(pin, HIGH);
   delay(100);
   int reading = analogRead(PHOTOTRANSISTOR_PIN);
+  Serial.println(reading);
+  Serial.println("in readColor");
+
   digitalWrite(pin, LOW);
   delay(100);
   return reading;
@@ -340,7 +349,7 @@ void updateSelectedGroupId()
 {
   int val = analogRead(POTENTIOMETER_PIN);
   //Values go from 0 to 1023
-  val = map(val, 0, 1023, 0, 10);
+  val = map(val, 0, 4095, 0, 10);
   colorDetector.selectedGroupId = val;
   displayColor(val); //Display the group ID on the LCD 
   delay(3000);
@@ -352,7 +361,8 @@ void setup()
   Serial.begin(9600);
   Serial.println("348");
   lcd.begin(16, 2);
-
+  //TODO
+  delay(2000);
   if (!SD.begin(PIN_CS_SPI)) {
     Serial.println("SD Card Mount Failed");
     lcd.print("SD Card Error");
@@ -382,7 +392,6 @@ void setup()
   
   getDataFromCard();
   colorDetector.loadingRequired = 0;
-  
   lcd.clear();
   
   if (digitalRead(TOGGLE_SWITCH_PIN)) {
@@ -428,33 +437,39 @@ void loop()
   // Check if button is pressed for sampling or training actions
   if (!digitalRead(BUTTON_PIN) && !colorDetector.currentlyReading) {
     colorDetector.currentlyReading = 1;
-
+    
+    //BEGIN TEST!!
     if (colorDetector.trainingModeActive) {
-      // Store data into the selected group's file on the SD card in training mode
-      File myFile = SD.open(String(colorDetector.selectedGroupId) + ".txt", FILE_WRITE);
-     // File myFile = SD.open("/" + String(name) + ".txt", FILE_WRITE);
+    // Open the file for appending in training mode
+    String fileName = "/" + String(colorDetector.selectedGroupId) + ".txt"; // Correct file path formatting
+    File myFile = SD.open(fileName, FILE_APPEND); // Open in append mode
 
+    if (!myFile) {
+        Serial.println("Failed to open file for writing in loop");
+        lcd.clear();
+        lcd.print("File Error");
+        delay(2000);
+        lcd.clear();
+        return; // Exit the block if file opening fails
+    }
 
-      Serial.println("opened file");
-      colorDetector.loadingRequired = 1;  // Flag to reload data on next sample
+    // Write color data to SD card in RGBY order
+    writeColor(RED_LED, myFile);
+    writeColor(GREEN_LED, myFile);
+    writeColor(BLUE_LED, myFile);
+    writeColor(YELLOW_LED, myFile);
+    myFile.print("\n"); // Ensure proper line separation
+    myFile.close();
 
-      // Write color data to SD card in RGBY order
-      writeColor(RED_LED, myFile);
-      writeColor(GREEN_LED, myFile);
-      writeColor(BLUE_LED, myFile);
-      writeColor(YELLOW_LED, myFile);
-      myFile.print("\n");
-      myFile.close();
-      Serial.println("closed file");
-      // Confirmation message for data storage in training mode
-      lcd.clear();
-      delay(200);
-      lcd.print("nut man");
-      delay(1000);  // Show confirmation for 1 second
-      lcd.clear();
-      Serial.println("after the balls");
+    // Confirmation message for successful data storage
+    lcd.clear();
+    lcd.print("Data Stored");
+    delay(1000); // Show confirmation for 1 second
+    lcd.clear();
+}
+//END TEST!!
 
-      } else {
+     else {
         // Sampling mode: Read color values and classify the sample
         lcd.clear();
         lcd.print("Sampling...");
