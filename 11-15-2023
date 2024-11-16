@@ -16,7 +16,7 @@ const char* colorNames[NUM_COLOR_VALUES] = {
 #define GREEN_LED 27  // Pin for Green LED output to indicate green color detection.
 #define RED_LED 33 
 #define BLUE_LED 12 
-#define PHOTOTRANSISTOR_PIN 3
+#define PHOTOTRANSISTOR_PIN 39
 #define TOGGLE_SWITCH_PIN 14 
 #define POTENTIOMETER_PIN 34 
 #define PIN_SPI_CS 5//4
