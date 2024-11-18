@@ -1,0 +1,416 @@
+/*
+COLOR DETECTOR | A project by GreekGrapes
+This project uses the KNN machine learning algorithm to classify the color input
+it's reading via the phototranistor. It was made with an Arduino Nano, but any
+board should work as long as you don't use up too much memory.
+One possible upgrade for this project would be to use EEPROM instead of an SD card
+module, since it takes up a large chunk of memory (512 bytes of SRAM according to Adafruit).
+A previous iteration I created used a Seeeduino Xiao, which is has more SRAM and a faster
+clock speed. The one downside is that you won't have enough pins, so you would need
+an MCP23017 to fix that.
+
+I've left comments all over the place to better explain what's going on, if you want to
+modify the code/understand how it all works <3
+
+I heavily utilize bitfields in this project, which is a super neat way to shrink memory.
+Here are some links that do an amazing job explaining bitfields and bitflags:
+Talks about bitflags    https://dylanleigh.net/notes/c-cpp-tips/
+Talks about bitfields   https://learn.microsoft.com/en-us/cpp/cpp/cpp-bit-fields?view=msvc-170
+*/
+
+#include <SPI.h>
+#include <SD.h>
+#include <math.h>
+
+#define SAMPLES_PER_GROUP 12
+
+#define NUM_COLOR_VALUES 4 //Red, blue, green, and yellow values
+#define BUTTON_PIN 2
+#define YELLOW_LED 14 //A0
+#define GREEN_LED 15 //A1
+#define RED_LED 16 //A2
+#define BLUE_LED 17 //A3
+#define PHOTOTRANSISTOR_PIN 18 //A4
+#define TOGGLE_SWITCH_PIN 19 //A5
+#define POTENTIOMETER_PIN 21 //A7
+
+struct sample{
+	//A sample of the values read by the phototransistor from the colored LEDs
+	unsigned int groupValue : 3; //We only need 3 bits to categorize 6 groups
+	uint8_t colorValues[NUM_COLOR_VALUES]; //RGBY values for the sample (1 byte per entry for a total of 4 bytes)
+	unsigned int distance : 11; //The biggest distance can be 2046 units (comparing all zeros to all 1023s) so we allocate 2048 bits.
+	
+	//Overloading the equal operator to set all values of one sample equal to another sample
+	sample& operator =(const sample& s)
+	{
+		for(int a = 0; a < NUM_COLOR_VALUES; a++)
+		{
+			colorValues[a] = s.colorValues[a];
+		}
+		distance = s.distance;
+		groupValue = s.groupValue;
+		return *this;
+	}
+};
+
+struct Group
+{
+	unsigned int id : 3; //There are only 6 groups, so we only need 3 bits
+	unsigned int frequency : 4; //We're limiting it to 12 samples per group, and 4 bits give us 15
+};
+
+struct{
+	//Used to keep track of global memory in a tight compartment
+	unsigned char trainingModeActive : 1; //Basically a boolean
+	unsigned char currentlyReading : 1; //Debounce for button press
+	unsigned char loadingRequired : 1; //When we flip the toggle switch to sampling, we need to load the data
+	unsigned int selectedGroupId : 4; //What's the potentiometer pointing to?
+	sample trainingData[6*SAMPLES_PER_GROUP];
+}colorDetector;
+
+void insertionSort(sample arr[], int n)
+{
+	//Copied and modified from GeeksForGeeks.com because I won't want libraries bloating things
+	int i, key, j;
+	for(i = 1; i < n; i++)
+	{
+		key = arr[i].distance;
+		j = i - 1;
+		
+		while(j >= 0 && arr[j].distance > key)
+		{
+			sample temp = arr[j+1];
+			arr[j+1] = arr[j];
+			arr[j] = temp;
+			j = j - 1;
+		}
+		arr[j+1].distance = key;
+	}
+}
+
+unsigned int colorValueDistance(const sample s1, sample s2)
+{
+	//Takes two colorValue arrays and finds the distance between each color value
+	//We're using the formula d=sqrt(sum((pixel_1 - pixel_2)^2))
+	sample differences; //Node's RGBY data will be the differences squared of each RGBY values from s1 and s2
+	float diff;
+	for(int a = 0; a < NUM_COLOR_VALUES; a++)
+	{
+		diff = s1.colorValues[a] - s2.colorValues[a];
+		differences.colorValues[a] = diff * diff;
+	}
+	
+	//Now we need to sum up the squared differences we just calculated
+	float sum = 0;
+	for(int a = 0; a < NUM_COLOR_VALUES; a++)
+	{
+		sum += differences.colorValues[a];
+	}
+	
+	//we are returning integer versions of the sqrt(sum) (up to 2^9 bits) because that's the max distance a sample can have
+	sum = sqrt(sum);
+	if(sum > 511)
+		return 511;
+	else if(sum < 1)
+		return 0;
+	else
+		return (int)sum;
+}
+
+/*
+The classify() function utilizes the KNN algorithm
+k is the number of nearby neighbors
+*/
+int classify(sample arr[], int numTrainingSamples, int k, const sample node)
+{
+	Group g0 {0};
+	Group g1 {1};
+	Group g2 {2};
+	Group g3 {3};
+	Group g4 {4};
+	Group g5 {5};
+	Group allGroups[6] = {g0,g1,g2,g3,g4,g5};
+	
+	//For each neighbor of the sample (node) we use the distance formula and set it's "distance" member variable
+	for(int a = 0; a < numTrainingSamples; a++)
+	{
+		arr[a].distance = colorValueDistance(node, arr[a]);
+	}
+	//Then we sort the array of training data based on the what's closest to the sample node
+	insertionSort(arr, numTrainingSamples-1);
+	//Now we count how many times each group is in the nearest k number of neighbors
+	for(int a = 0; a < k; a++)
+	{
+		switch(arr[a].groupValue)
+		{
+			case 0:
+				allGroups[0].frequency++;
+				break;
+			case 1:
+				allGroups[1].frequency++;
+				break;
+			case 2:
+				allGroups[2].frequency++;
+				break;
+			case 3:
+				allGroups[3].frequency++;
+				break;
+			case 4:
+				allGroups[4].frequency++;
+				break;
+			case 5:
+				allGroups[5].frequency++;
+				break;
+			case 6:
+				allGroups[6].frequency++;
+				break;
+		}
+	}
+	
+	//Finally, we look at the most common group in the neighboring samples
+	int highestFrequency = 0;
+	int groupNumber;
+	for(int a = 0; a < 6; a++) //6 because there are 6 groups
+	{
+		if(allGroups[a].frequency >= highestFrequency)
+		{
+			highestFrequency = allGroups[a].frequency;
+			groupNumber = allGroups[a].id;
+		}
+	}
+	
+	return groupNumber;
+}
+
+void getDataFromCard()
+{
+	//Read each file on the SD card line by line, storing the data in each sample in the "trainingData" array (arr)
+	File myFile;
+	String value; //Number we read from each file
+	int row = 0;
+	int nodeCount = 0;
+	int counter = 0;
+	for(int groupNumber = 0; groupNumber < 6; groupNumber++)
+	{
+    Serial.println(groupNumber);
+		myFile = SD.open(String(groupNumber) + ".txt", FILE_READ);
+		while(1)
+		{
+			value = myFile.readStringUntil('.');
+			if(value == NULL || value == (String)'\n' || counter == SAMPLES_PER_GROUP)
+			{
+				row = 0;
+				counter = 0;
+				break;
+			}
+			//Store the value from the file into the sample
+			colorDetector.trainingData[nodeCount].colorValues[row] = value.toInt();
+			colorDetector.trainingData[nodeCount].groupValue = groupNumber;
+      Serial.println(colorDetector.trainingData[nodeCount].colorValues[row]);
+			row++;
+			if(row == 4)
+			{
+				row = 0;
+				nodeCount++;
+				counter++;
+			}
+		}
+		myFile.close();
+	}
+  Serial.println(colorDetector.trainingData[0].colorValues[0]);
+}
+
+void displayNumber(int number)
+{
+	//Displays the given number on the 7-segment display
+	//Displays a letter on the 7-segment display based on the number given
+	//If these are backwards, swap the positive and negative wires on your potentiometer
+	switch(number)
+	{
+		case 0: //A
+			digitalWrite(3, HIGH);
+			digitalWrite(4, HIGH);
+			digitalWrite(5, HIGH);
+			digitalWrite(6, HIGH);
+			digitalWrite(7, LOW);
+			digitalWrite(8, HIGH);
+			digitalWrite(9, HIGH);
+			break;
+		case 1: //B
+			digitalWrite(3,LOW);
+			digitalWrite(4,HIGH);
+			digitalWrite(5,LOW);
+			digitalWrite(6,HIGH);
+			digitalWrite(7,HIGH);
+			digitalWrite(8,HIGH);
+			digitalWrite(9,HIGH);
+			break;
+		case 2: //C
+			digitalWrite(3,LOW);
+			digitalWrite(4,HIGH);
+			digitalWrite(5,HIGH);
+			digitalWrite(6,LOW);
+			digitalWrite(7,HIGH);
+			digitalWrite(8,LOW);
+			digitalWrite(9,HIGH);
+			break;
+		case 3: //D
+			digitalWrite(3,HIGH);
+			digitalWrite(4,LOW);
+			digitalWrite(5,LOW);
+			digitalWrite(6,HIGH);
+			digitalWrite(7,HIGH);
+			digitalWrite(8,HIGH);
+			digitalWrite(9,HIGH);
+			break;
+		case 4: //E
+			digitalWrite(3,LOW);
+			digitalWrite(4,HIGH);
+			digitalWrite(5,HIGH);
+			digitalWrite(6,HIGH);
+			digitalWrite(7,HIGH);
+			digitalWrite(8,LOW);
+			digitalWrite(9,HIGH);
+			break;
+		case 5: //F
+			digitalWrite(3,LOW);
+			digitalWrite(4,HIGH);
+			digitalWrite(5,HIGH);
+			digitalWrite(6,HIGH);
+			digitalWrite(7,LOW);
+			digitalWrite(8,LOW);
+			digitalWrite(9,HIGH);
+			break;
+	}
+}
+
+int getNumDigits(int num)
+{
+	//Returns the number of digits in an integer
+	return (int) log10((double) num) + 1;
+}
+
+void writeColor(int pin, File myFile)
+{
+	//Turns on an LED at the specified pin, reads the value on the transistor, and stores it in 4-char format on the SD card
+	digitalWrite(pin, HIGH);
+	delay(100);
+	int reading = analogRead(PHOTOTRANSISTOR_PIN);
+	int numDigits = getNumDigits(reading);
+	switch(numDigits)
+	{
+		case 0:
+			myFile.print("0000");
+			break;
+		case 1:
+			myFile.print("000" + String(reading));
+			break;
+		case 2:
+			myFile.print("00" + String(reading));
+			break;
+		case 3:
+			myFile.print("0" + String(reading));
+			break;
+		default:
+			myFile.print(String(reading));
+	}
+	myFile.print(".");
+	digitalWrite(pin, LOW);
+	delay(100);
+}
+
+int readColor(int pin)
+{
+	//Very similar to writeColor() but we don't involve the SD card
+	digitalWrite(pin, HIGH);
+	delay(100);
+	int reading = analogRead(PHOTOTRANSISTOR_PIN);
+	digitalWrite(pin, LOW);
+	delay(100);
+	return reading;
+}
+
+void updateSelectedGroupId()
+{
+	int val = analogRead(POTENTIOMETER_PIN);
+	//Values go from 0 to 1023
+	val = map(val, 0, 1023, 0, 5);
+	colorDetector.selectedGroupId = val;
+	displayNumber(val); //Display the group ID on the 7-segment display
+}
+
+void setup()
+{
+  Serial.begin(9600);
+	SD.begin();
+	pinMode(BUTTON_PIN, INPUT_PULLUP);
+	pinMode(TOGGLE_SWITCH_PIN, INPUT_PULLUP);
+	pinMode(POTENTIOMETER_PIN, INPUT);
+	pinMode(PHOTOTRANSISTOR_PIN, INPUT);
+	pinMode(YELLOW_LED, OUTPUT);
+	pinMode(GREEN_LED, OUTPUT);
+	pinMode(RED_LED, OUTPUT);
+	pinMode(BLUE_LED, OUTPUT);
+	pinMode(3, OUTPUT); //These unnamed pins are for the 7-segment display
+	pinMode(4, OUTPUT);
+	pinMode(5, OUTPUT);
+	pinMode(6, OUTPUT);
+	pinMode(7, OUTPUT);
+	pinMode(8, OUTPUT);
+	pinMode(9, OUTPUT);
+	getDataFromCard();
+	colorDetector.loadingRequired = 0;
+	digitalWrite(6, HIGH); //Just display a dash at the very beginning so we know it's on
+}
+
+void loop()
+{
+	colorDetector.trainingModeActive = digitalRead(TOGGLE_SWITCH_PIN);
+	if(colorDetector.trainingModeActive)
+		updateSelectedGroupId(); //Update 7-segment display as the potentiometer turns
+	if(!digitalRead(BUTTON_PIN) && !colorDetector.currentlyReading)
+	{
+		colorDetector.currentlyReading = 1;
+		if(colorDetector.trainingModeActive)
+		{
+			//When we click the button we will store the data into the selected group's file on the SD card
+			File myFile = SD.open((String)colorDetector.selectedGroupId + ".txt", FILE_WRITE);
+			//Since we added to the training data, we need to load that new data next time we sample
+			colorDetector.loadingRequired = 1;
+			//Write color data to SD card in RGBY order
+			writeColor(RED_LED, myFile);
+			writeColor(GREEN_LED, myFile);
+			writeColor(BLUE_LED, myFile);
+			writeColor(YELLOW_LED, myFile);
+			myFile.print("\n");
+			myFile.close();
+		}
+		else
+		{
+			//When we click the button we will compare the sample data to the training data
+			//But first, turn off the display except for the middle dash so we know when it's done classifying
+			for(int i = 3; i < 10; i++)
+			{
+				digitalWrite(i, LOW);
+			}
+			digitalWrite(6, HIGH);
+			sample newSample;
+			newSample.colorValues[0] = readColor(RED_LED);
+			newSample.colorValues[1] = readColor(GREEN_LED);
+			newSample.colorValues[2] = readColor(BLUE_LED);
+			newSample.colorValues[3] = readColor(YELLOW_LED);
+			//If we haven't added anything new to the training data, we don't need to read from the SD card again
+			if(colorDetector.loadingRequired)
+			{
+				//Take the training data from the SD card and put it into the trainingData array
+				getDataFromCard();
+				colorDetector.loadingRequired = 0;
+			}
+			//Now we use the classify() function to determine what color newSample is... but how many neighbors should we look at?
+			//Typically you can get away with setting k to the square root of the total number of datapoints. In our case k=sqrt(6*12)
+			int newSample_groupId = classify(colorDetector.trainingData, 6*SAMPLES_PER_GROUP, 9, newSample);
+			displayNumber(newSample_groupId);
+		}
+		colorDetector.currentlyReading = 0;
+	}
+}
